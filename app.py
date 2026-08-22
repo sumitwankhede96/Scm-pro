@@ -503,6 +503,62 @@ def change_password():
 """)
 
 
+
+@app.route("/change-password", methods=["GET", "POST"])
+@role_required("admin")
+def change_password():
+    user = current_user()
+
+    if request.method == "POST":
+        current_password = request.form.get("current_password", "")
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not user.check_password(current_password):
+            return "Current password is incorrect", 400
+
+        if len(new_password) < 8:
+            return "New password must be at least 8 characters", 400
+
+        if new_password != confirm_password:
+            return "New passwords do not match", 400
+
+        user.set_password(new_password)
+        db.session.commit()
+
+        return redirect("/dashboard")
+
+    return render_page("""
+<h1>🔐 Change Admin Password</h1>
+
+<form method="post">
+
+<input
+    name="current_password"
+    type="password"
+    placeholder="Current Password"
+    required>
+
+<input
+    name="new_password"
+    type="password"
+    minlength="8"
+    placeholder="New Password"
+    required>
+
+<input
+    name="confirm_password"
+    type="password"
+    minlength="8"
+    placeholder="Confirm New Password"
+    required>
+
+<button type="submit">🔐 Change Password</button>
+
+</form>
+""")
+
+
 @app.route("/logout")
 def logout():
 
