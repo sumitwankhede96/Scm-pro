@@ -495,7 +495,77 @@ def dashboard():
     quantities = [x.quantity for x in items]
 
     return render_page("""
-<h1>📊 SCM PRO V8 Dashboard</h1>
+
+<h1>📊 SCM PRO V10 Dashboard</h1>
+
+<div class="card">
+<h2>🔎 Global Search</h2>
+
+<input
+id="globalSearch"
+type="text"
+placeholder="Search inventory, supplier, sale, order or invoice..."
+autocomplete="off"
+style="width:100%;box-sizing:border-box;color:#111827!important;background:#fff!important;"
+>
+
+<div id="globalResults" style="margin-top:12px;"></div>
+</div>
+
+<script>
+let searchTimer;
+
+document.getElementById("globalSearch").addEventListener("input", function () {
+
+    clearTimeout(searchTimer);
+
+    const q = this.value.trim();
+    const box = document.getElementById("globalResults");
+
+    if (!q) {
+        box.innerHTML = "";
+        return;
+    }
+
+    box.innerHTML = "🔎 Searching...";
+
+    searchTimer = setTimeout(async () => {
+
+        try {
+            const response = await fetch(
+                "/api/search?q=" + encodeURIComponent(q)
+            );
+
+            const data = await response.json();
+
+            if (!data.results || data.results.length === 0) {
+                box.innerHTML = "<p>❌ No results found</p>";
+                return;
+            }
+
+            box.innerHTML = data.results.map(x => `
+                <div style="
+                    padding:12px;
+                    margin:6px 0;
+                    border:1px solid #ddd;
+                    border-radius:8px;
+                    background:#fff;
+                    color:#111827;
+                ">
+                    <b>${x.type}</b> — ${x.name}<br>
+                    <small>${x.detail}</small>
+                </div>
+            `).join("");
+
+        } catch (error) {
+            box.innerHTML = "⚠️ Search error";
+        }
+
+    }, 250);
+
+});
+</script>
+
 
 <div class="grid">
 
