@@ -992,18 +992,22 @@ def sales():
 
     if request.method == "POST":
 
-        item = db.session.get(
-            Item,
-            int(request.form["item"])
-        )
+        try:
+            item_id = request.form.get("item", "").strip()
+            quantity_raw = request.form.get("quantity", "").strip()
+            customer = request.form.get("customer", "").strip() or "Walk-in Customer"
 
-        quantity = int(
-            request.form["quantity"]
-        )
+            if not item_id:
+                return "❌ Please select an item", 400
 
-        customer = request.form.get(
-            "customer", "Walk-in Customer"
-        )
+            if not quantity_raw:
+                return "❌ Please enter quantity", 400
+
+            item = db.session.get(Item, int(item_id))
+            quantity = int(quantity_raw)
+
+        except (ValueError, TypeError):
+            return "❌ Invalid item or quantity", 400
 
         if not item:
             return "❌ Item not found"
