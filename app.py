@@ -1042,23 +1042,34 @@ def sales():
 
     items = Item.query.all()
 
-    # Create a demo item automatically if inventory is empty.
-    # This is only for initial testing of the Sales page.
+    # Import real inventory from scm_data.json when database is empty.
     if not items:
-        demo = Item(
-            sku="DEMO-001",
-            name="Demo Product",
-            quantity=10,
-            price=100,
-            cost=60,
-            minimum=2,
-            supplier="Demo Supplier",
-            category="General",
-            location="Main"
-        )
-        db.session.add(demo)
-        db.session.commit()
-        items = [demo]
+        import json
+
+        try:
+            with open("scm_data.json", "r") as f:
+                data = json.load(f)
+
+            for i, x in enumerate(data.get("items", []), start=1):
+                item = Item(
+                    sku=x.get("sku") or f"SKU-{i:03d}",
+                    name=x.get("name", f"Item {i}"),
+                    quantity=int(x.get("quantity", 0)),
+                    price=float(x.get("price", 0)),
+                    cost=float(x.get("cost", 0)),
+                    minimum=int(x.get("minimum", 0)),
+                    supplier=x.get("supplier", ""),
+                    category=x.get("category", ""),
+                    location=x.get("location", "")
+                )
+                db.session.add(item)
+
+            db.session.commit()
+            items = Item.query.all()
+
+        except Exception as e:
+            db.session.rollback()
+            return f"Inventory import error: {e}"
 
     sales = Sale.query.order_by(
         Sale.date.desc()
