@@ -1872,6 +1872,91 @@ if __name__ == "__main__":
 # SCM PRO V9 UPGRADE PACK
 # =========================
 
+
+@app.route("/api/search")
+@login_required
+def global_search():
+    q = request.args.get("q", "").strip()
+
+    if not q:
+        return {"query": "", "results": []}
+
+    like = f"%{q}%"
+    results = []
+
+    for x in Item.query.filter(
+        db.or_(
+            Item.sku.ilike(like),
+            Item.name.ilike(like),
+            Item.category.ilike(like),
+            Item.supplier.ilike(like),
+            Item.location.ilike(like)
+        )
+    ).limit(20).all():
+        results.append({
+            "type": "Inventory",
+            "name": x.name,
+            "detail": f"SKU: {x.sku} | Stock: {x.quantity}"
+        })
+
+    for x in Supplier.query.filter(
+        db.or_(
+            Supplier.name.ilike(like),
+            Supplier.phone.ilike(like),
+            Supplier.email.ilike(like)
+        )
+    ).limit(20).all():
+        results.append({
+            "type": "Supplier",
+            "name": x.name,
+            "detail": x.phone or x.email or ""
+        })
+
+    for x in Sale.query.filter(
+        db.or_(
+            Sale.invoice_no.ilike(like),
+            Sale.customer.ilike(like),
+            Sale.item.ilike(like)
+        )
+    ).limit(20).all():
+        results.append({
+            "type": "Sale",
+            "name": x.invoice_no,
+            "detail": f"{x.customer} | ₹{x.total}"
+        })
+
+    for x in Order.query.filter(
+        db.or_(
+            Order.po_no.ilike(like),
+            Order.item.ilike(like),
+            Order.supplier.ilike(like),
+            Order.status.ilike(like)
+        )
+    ).limit(20).all():
+        results.append({
+            "type": "Order",
+            "name": x.po_no,
+            "detail": f"{x.item} | {x.status}"
+        })
+
+    for x in Invoice.query.filter(
+        db.or_(
+            Invoice.invoice_no.ilike(like),
+            Invoice.customer.ilike(like)
+        )
+    ).limit(20).all():
+        results.append({
+            "type": "Invoice",
+            "name": x.invoice_no,
+            "detail": x.customer
+        })
+
+    return {
+        "query": q,
+        "count": len(results),
+        "results": results[:100]
+    }
+
 @app.route("/api/stats")
 @login_required
 def api_stats():
