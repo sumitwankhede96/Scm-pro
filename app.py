@@ -1069,7 +1069,9 @@ def sales():
 name="customer"
 placeholder="Customer Name">
 
-<select name="item">
+<select name="item" required>
+
+<option value="" selected disabled>-- Select Item --</option>
 
 {% for x in items %}
 
