@@ -613,6 +613,66 @@ def dashboard():
     revenue = sum(x.total for x in sales)
     profit = sum(x.profit for x in sales)
 
+    # V12 Financial Analytics
+    invoices = Invoice.query.all()
+
+    total_invoiced = sum(
+        float(x.amount or 0)
+        for x in invoices
+    )
+
+    total_paid = sum(
+        float(x.paid_amount or 0)
+        for x in invoices
+    )
+
+    outstanding = max(
+        total_invoiced - total_paid,
+        0
+    )
+
+    collection_rate = (
+        (total_paid / total_invoiced) * 100
+        if total_invoiced > 0
+        else 0
+    )
+
+    unpaid_invoices = sum(
+        1 for x in invoices
+        if (x.payment_status or "Unpaid") == "Unpaid"
+    )
+
+    partial_invoices = sum(
+        1 for x in invoices
+        if (x.payment_status or "Unpaid") == "Partial"
+    )
+
+    paid_invoices = sum(
+        1 for x in invoices
+        if (x.payment_status or "Unpaid") == "Paid"
+    )
+
+    # V12 Invoice balances
+    invoice_balances = []
+
+    for inv in invoices:
+        total = float(inv.amount or 0)
+        paid = float(inv.paid_amount or 0)
+
+        invoice_balances.append({
+            "invoice_no": inv.invoice_no,
+            "customer": inv.customer,
+            "total": total,
+            "paid": paid,
+            "balance": max(total - paid, 0),
+            "status": inv.payment_status or "Unpaid"
+        })
+
+    invoice_balances.sort(
+        key=lambda x: x["balance"],
+        reverse=True
+    )
+
     low = [
         x for x in items
         if x.quantity <= x.minimum
@@ -680,7 +740,79 @@ def dashboard():
 
     return render_page("""
 
-<h1>📊 SCM PRO V10 Dashboard</h1>
+<h1>📊 SCM PRO V12 Dashboard</h1>
+
+<div style="
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+gap:12px;
+margin-bottom:20px;
+">
+
+<div class="card">
+<h3>💰 Revenue</h3>
+<h2>₹{{"%.2f"|format(revenue or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>📈 Profit</h3>
+<h2>₹{{"%.2f"|format(profit or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>🧾 Invoiced</h3>
+<h2>₹{{"%.2f"|format(total_invoiced or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>💳 Collected</h3>
+<h2>₹{{"%.2f"|format(total_paid or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>⚠️ Outstanding</h3>
+<h2>₹{{"%.2f"|format(outstanding or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>📊 Collection Rate</h3>
+<h2>{{"%.1f"|format(collection_rate or 0)}}%</h2>
+</div>
+
+</div>
+
+<div class="card">
+
+<h2>🧾 Invoice Payment Summary</h2>
+
+<div style="
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+gap:10px;
+">
+
+<div>
+<b>🟢 Paid</b>
+<br>
+{{paid_invoices}}
+</div>
+
+<div>
+<b>🟡 Partial</b>
+<br>
+{{partial_invoices}}
+</div>
+
+<div>
+<b>🔴 Unpaid</b>
+<br>
+{{unpaid_invoices}}
+</div>
+
+</div>
+
+</div>
+
 
 <div class="card">
 <h2>🔎 Global Search</h2>
