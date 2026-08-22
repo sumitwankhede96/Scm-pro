@@ -990,32 +990,77 @@ required>
 @login_required
 def sales():
 
+    # Make sure real inventory exists in the database.
+    real_items = [
+        ("BEARING-001", "Bearing", 50, 120, 80, 10, "ABC Engineering", "Mechanical", "Main"),
+        ("GEAR-001", "Gear", 8, 500, 350, 10, "XYZ Industries", "Mechanical", "Main"),
+        ("BOLT-001", "Bolt", 150, 15, 8, 20, "Fastener Co.", "Hardware", "Main"),
+    ]
+
+    for sku, name, qty, price, cost, minimum, supplier, category, location in real_items:
+        item = Item.query.filter_by(sku=sku).first()
+
+        if not item:
+            item = Item(
+                sku=sku,
+                name=name,
+                quantity=qty,
+                price=price,
+                cost=cost,
+                minimum=minimum,
+                supplier=supplier,
+                category=category,
+                location=location
+            )
+            db.session.add(item)
+
+    # Remove old demo item if present.
+    demo = Item.query.filter_by(sku="DEMO-001").first()
+    if demo:
+        db.session.delete(demo)
+
+    db.session.commit()
+
     if request.method == "POST":
+
         try:
+            item_id = request.form.get("item", "").strip()
             item_name = request.form.get("item_name", "").strip()
-            quantity = int(request.form.get("quantity", "0"))
+            quantity_raw = request.form.get("quantity", "").strip()
             customer = request.form.get("customer", "").strip() or "Walk-in Customer"
 
-            if not item_name:
-                return "❌ Please enter an item name", 400
+            item = None
+
+            # First try item ID from dropdown.
+            if item_id:
+                try:
+                    item = db.session.get(Item, int(item_id))
+                except (ValueError, TypeError):
+                    pass
+
+            # Fallback to item name.
+            if not item and item_name:
+                item = Item.query.filter(
+                    db.func.lower(Item.name) == item_name.lower()
+                ).first()
+
+            if not item:
+                return "❌ Please select an item", 400
+
+            quantity = int(quantity_raw)
 
             if quantity <= 0:
                 return "❌ Invalid quantity", 400
 
-            item = Item.query.filter(
-                db.func.lower(Item.name) == item_name.lower()
-            ).first()
-
-            if not item:
-                return "❌ Item not found in Inventory. Please add the item first.", 400
-
             if quantity > item.quantity:
-                return "❌ Insufficient stock", 400
+                return f"❌ Insufficient stock. Available: {item.quantity}", 400
 
-            total = quantity * item.price
-            profit = quantity * (item.price - item.cost)
+            total = quantity * float(item.price or 0)
+            profit = quantity * (
+                float(item.price or 0) - float(item.cost or 0)
+            )
 
-            invoice_no = "INV-" + datetime.now().strftime("%Y%m%d%H%M%S")
+            invoice_no = "INV-" + datetime.now().strftime("%Y%m%d%H%M%S%f")
 
             item.quantity -= quantity
 
@@ -1029,47 +1074,24 @@ def sales():
             )
 
             db.session.add(sale)
-            log(f"Sale: {item.name} x {quantity}")
+
+            try:
+                log(f"Sale: {item.name} x {quantity}")
+            except Exception:
+                pass
+
             db.session.commit()
 
-            return redirect("/sales?success=" + invoice_no)
+            return redirect(url_for("sales", success=invoice_no))
 
         except (ValueError, TypeError):
             return "❌ Please enter a valid quantity", 400
+
         except Exception as e:
             db.session.rollback()
             return "❌ Sale failed: " + str(e), 500
 
-    items = Item.query.all()
-
-    # Import real inventory from scm_data.json when database is empty.
-    if not items:
-        import json
-
-        try:
-            with open("scm_data.json", "r") as f:
-                data = json.load(f)
-
-            for i, x in enumerate(data.get("items", []), start=1):
-                item = Item(
-                    sku=x.get("sku") or f"SKU-{i:03d}",
-                    name=x.get("name", f"Item {i}"),
-                    quantity=int(x.get("quantity", 0)),
-                    price=float(x.get("price", 0)),
-                    cost=float(x.get("cost", 0)),
-                    minimum=int(x.get("minimum", 0)),
-                    supplier=x.get("supplier", ""),
-                    category=x.get("category", ""),
-                    location=x.get("location", "")
-                )
-                db.session.add(item)
-
-            db.session.commit()
-            items = Item.query.all()
-
-        except Exception as e:
-            db.session.rollback()
-            return f"Inventory import error: {e}"
+    items = Item.query.order_by(Item.name.asc()).all()
 
     sales = Sale.query.order_by(
         Sale.date.desc()
@@ -1082,29 +1104,35 @@ def sales():
 
 <label>Customer Name</label>
 <input
-name="customer"
-placeholder="Customer Name">
+    name="customer"
+    placeholder="Customer Name"
+    autocomplete="off">
 
-<label>Item Name</label>
+<br><br>
+
+<label>Item</label>
+
+<select name="item" required>
+    <option value="" selected disabled>-- Select Item --</option>
+
+    {% for x in items %}
+    <option value="{{ x.id }}">
+        {{ x.name }} — ₹{{ "%.2f"|format(x.price or 0) }} — Stock {{ x.quantity }}
+    </option>
+    {% endfor %}
+
+</select>
+
+<br><br>
+
 <input
-name="item_name"
-list="salesItems"
-placeholder="Type item name"
-required>
+    name="quantity"
+    type="number"
+    min="1"
+    placeholder="Quantity"
+    required>
 
-<datalist id="salesItems">
-{% for x in items %}
-<option value="{{x.name}}">₹{{x.price}} — Stock {{x.quantity}}</option>
-{% endfor %}
-</datalist>
-
-<label>Quantity</label>
-<input
-name="quantity"
-type="number"
-min="1"
-placeholder="Quantity"
-required>
+<br><br>
 
 <button type="submit">💵 Record Sale</button>
 
@@ -1124,13 +1152,13 @@ required>
 
 {% for x in sales %}
 <tr>
-<td>{{x.invoice_no}}</td>
-<td>{{x.customer}}</td>
-<td>{{x.item}}</td>
-<td>{{x.quantity}}</td>
-<td>₹{{"%.2f"|format(x.total)}}</td>
-<td>₹{{"%.2f"|format(x.profit)}}</td>
-<td>{{x.date}}</td>
+<td>{{ x.invoice_no }}</td>
+<td>{{ x.customer }}</td>
+<td>{{ x.item }}</td>
+<td>{{ x.quantity }}</td>
+<td>₹{{ "%.2f"|format(x.total or 0) }}</td>
+<td>₹{{ "%.2f"|format(x.profit or 0) }}</td>
+<td>{{ x.date }}</td>
 </tr>
 {% endfor %}
 
