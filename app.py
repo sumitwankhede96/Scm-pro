@@ -328,6 +328,8 @@ LOGIN = STYLE + """
 
 <input
 name="username"
+style="width:100%;box-sizing:border-box;background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;"
+
 placeholder="Username"
 autocomplete="username"
 required>
@@ -335,6 +337,7 @@ required>
 <input
 name="password"
 type="password"
+style="width:100%;box-sizing:border-box;background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;"
 placeholder="Password"
 autocomplete="current-password"
 required>
@@ -1888,12 +1891,15 @@ def users():
 
 <input
 name="username"
+style="width:100%;box-sizing:border-box;background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;"
+
 placeholder="Username"
 required>
 
 <input
 name="password"
 type="password"
+style="width:100%;box-sizing:border-box;background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;"
 placeholder="Password"
 required>
 
