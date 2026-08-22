@@ -1866,3 +1866,312 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 8080))
     )
+
+# =========================
+# SCM PRO V9 UPGRADE PACK
+# =========================
+
+@app.route("/api/stats")
+@login_required
+def api_stats():
+    items = Item.query.all()
+    sales = Sale.query.all()
+
+    return {
+        "items": len(items),
+        "stock_units": sum(x.quantity for x in items),
+        "stock_value": round(sum(x.quantity*x.price for x in items), 2),
+        "revenue": round(sum(x.total for x in sales), 2),
+        "profit": round(sum(x.profit for x in sales), 2),
+        "low_stock": len([
+            x for x in items if x.quantity <= x.minimum
+        ])
+    }
+
+
+@app.route("/api/inventory")
+@login_required
+def api_inventory():
+
+    return {
+        "items": [
+            {
+                "id": x.id,
+                "sku": x.sku,
+                "name": x.name,
+                "quantity": x.quantity,
+                "price": x.price,
+                "cost": x.cost,
+                "minimum": x.minimum,
+                "supplier": x.supplier,
+                "category": x.category,
+                "location": x.location,
+                "low_stock": x.quantity <= x.minimum
+            }
+            for x in Item.query.all()
+        ]
+    }
+
+
+@app.route("/api/sales")
+@login_required
+def api_sales():
+
+    return {
+        "sales": [
+            {
+                "invoice": x.invoice_no,
+                "customer": x.customer,
+                "item": x.item,
+                "quantity": x.quantity,
+                "revenue": x.total,
+                "profit": x.profit,
+                "date": str(x.date)
+            }
+            for x in Sale.query.order_by(
+                Sale.date.desc()
+            ).limit(200).all()
+        ]
+    }
+
+
+@app.route("/api/low-stock")
+@login_required
+def api_low_stock():
+
+    items = [
+        {
+            "sku": x.sku,
+            "name": x.name,
+            "quantity": x.quantity,
+            "minimum": x.minimum
+        }
+        for x in Item.query.all()
+        if x.quantity <= x.minimum
+    ]
+
+    return {
+        "count": len(items),
+        "items": items
+    }
+
+
+@app.route("/api/orders")
+@login_required
+def api_orders():
+
+    return {
+        "orders": [
+            {
+                "po": x.po_no,
+                "item": x.item,
+                "quantity": x.quantity,
+                "supplier": x.supplier,
+                "status": x.status,
+                "date": str(x.date)
+            }
+            for x in Order.query.order_by(
+                Order.date.desc()
+            ).limit(200).all()
+        ]
+    }
+
+
+@app.route("/api/suppliers")
+@login_required
+def api_suppliers():
+
+    return {
+        "suppliers": [
+            {
+                "name": x.name,
+                "phone": x.phone,
+                "email": x.email,
+                "address": x.address,
+                "rating": x.rating
+            }
+            for x in Supplier.query.order_by(
+                Supplier.name
+            ).all()
+        ]
+    }
+
+
+@app.route("/api/activity")
+@role_required("admin")
+def api_activity():
+
+    return {
+        "activity": [
+            {
+                "user": x.username,
+                "action": x.action,
+                "date": str(x.date)
+            }
+            for x in Activity.query.order_by(
+                Activity.date.desc()
+            ).limit(300).all()
+        ]
+    }
+
+
+@app.route("/v9")
+@login_required
+def v9():
+
+    return render_page("""
+<h1>🚀 SCM PRO V9</h1>
+
+<div class="grid">
+
+<div class="card">
+<h3>📊 Live Dashboard</h3>
+<p id="items">Loading...</p>
+</div>
+
+<div class="card">
+<h3>📦 Stock Units</h3>
+<p id="stock">Loading...</p>
+</div>
+
+<div class="card">
+<h3>💵 Revenue</h3>
+<p id="revenue">Loading...</p>
+</div>
+
+<div class="card">
+<h3>📈 Profit</h3>
+<p id="profit">Loading...</p>
+</div>
+
+<div class="card">
+<h3>🚨 Low Stock</h3>
+<p id="low">Loading...</p>
+</div>
+
+</div>
+
+<div class="card">
+<h2>📦 Inventory Monitor</h2>
+
+<input
+id="search"
+placeholder="🔎 Search inventory..."
+onkeyup="filterItems()">
+
+<div style="overflow:auto">
+
+<table id="inventoryTable">
+
+<thead>
+
+<tr>
+<th>SKU</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Price</th>
+<th>Category</th>
+<th>Status</th>
+</tr>
+
+</thead>
+
+<tbody id="inventoryBody"></tbody>
+
+</table>
+
+</div>
+</div>
+
+<script>
+
+let inventory=[];
+
+async function loadDashboard(){
+
+const r=await fetch("/api/stats");
+const d=await r.json();
+
+document.getElementById("items").innerText=d.items;
+document.getElementById("stock").innerText=d.stock_units;
+document.getElementById("revenue").innerText="₹"+d.revenue;
+document.getElementById("profit").innerText="₹"+d.profit;
+document.getElementById("low").innerText=d.low_stock;
+
+}
+
+async function loadInventory(){
+
+const r=await fetch("/api/inventory");
+const d=await r.json();
+
+inventory=d.items;
+
+renderInventory(inventory);
+
+}
+
+function renderInventory(data){
+
+let html="";
+
+data.forEach(x=>{
+
+html+=`
+
+<tr>
+
+<td>${x.sku}</td>
+
+<td>${x.name}</td>
+
+<td>${x.quantity}</td>
+
+<td>₹${x.price}</td>
+
+<td>${x.category}</td>
+
+<td>
+${x.low_stock
+? "⚠️ LOW"
+: "✅ OK"}
+</td>
+
+</tr>
+
+`;
+
+});
+
+document.getElementById(
+"inventoryBody"
+).innerHTML=html;
+
+}
+
+function filterItems(){
+
+const q=document
+.getElementById("search")
+.value
+.toLowerCase();
+
+renderInventory(
+inventory.filter(x=>
+x.name.toLowerCase().includes(q) ||
+x.sku.toLowerCase().includes(q) ||
+x.category.toLowerCase().includes(q)
+)
+);
+
+}
+
+loadDashboard();
+loadInventory();
+
+setInterval(loadDashboard,30000);
+setInterval(loadInventory,30000);
+
+</script>
+""")
+
