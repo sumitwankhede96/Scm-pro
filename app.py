@@ -1032,7 +1032,7 @@ def sales():
             log(f"Sale: {item.name} x {quantity}")
             db.session.commit()
 
-            return redirect(url_for("invoice", invoice_no=invoice_no))
+            return redirect("/sales?success=" + invoice_no)
 
         except (ValueError, TypeError):
             return "❌ Please enter a valid quantity", 400
