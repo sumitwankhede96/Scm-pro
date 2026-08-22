@@ -1424,33 +1424,34 @@ def order_update(id):
 
     order.status = new
 
-        # When PO becomes Received, add stock only once.
-        if new == "Received" and old != "Received":
+    # When PO becomes Received, add stock only once.
+    if new == "Received" and old != "Received":
 
-            already_received = StockLog.query.filter_by(
-                action="IN",
-                note=f"PO {order.po_no} received"
+        already_received = StockLog.query.filter_by(
+            action="IN",
+            note=f"PO {order.po_no} received"
+        ).first()
+
+        if not already_received:
+
+            item = Item.query.filter(
+                (Item.name == order.item)
+                | (Item.sku == order.item)
             ).first()
 
-            if not already_received:
+            if item:
+                item.quantity += order.quantity
 
-                item = Item.query.filter(
-                    (Item.name == order.item)
-                    | (Item.sku == order.item)
-                ).first()
-
-                if item:
-                    item.quantity += order.quantity
-
-                    db.session.add(
-                        StockLog(
-                            item=item.name,
-                            action="IN",
-                            quantity=order.quantity,
-                            note=f"PO {order.po_no} received",
-                            user=session["username"]
-                        )
+                db.session.add(
+                    StockLog(
+                        item=item.name,
+                        action="IN",
+                        quantity=order.quantity,
+                        note=f"PO {order.po_no} received",
+                        user=session["username"]
                     )
+                )
+
     log(
         f"PO {order.po_no}: {old} → {new}"
     )
