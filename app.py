@@ -123,10 +123,11 @@ with app.app_context():
         u.set_password("admin123")
         db.session.add(u)
 
-    if not User.query.filter_by(username="manager").first():
-        u = User(username="manager", role="manager")
-        u.set_password("manager123")
-        db.session.add(u)
+    # Manager account is no longer an elevated role.
+    # Keep the account but make it Staff.
+    manager = User.query.filter_by(username="manager").first()
+    if manager:
+        manager.role = "staff"
 
     if not User.query.filter_by(username="staff").first():
         u = User(username="staff", role="staff")
@@ -1797,9 +1798,11 @@ def users():
 
             return "❌ Username already exists"
 
+        # Only Admin can create users, and all newly-created users
+        # are permanently Staff accounts.
         u = User(
             username=username,
-            role=request.form["role"]
+            role="staff"
         )
 
         u.set_password(
@@ -1834,13 +1837,13 @@ type="password"
 placeholder="Password"
 required>
 
-<select name="role">
+<input
+value="Staff"
+disabled>
 
-<option value="staff">Staff</option>
-<option value="manager">Manager</option>
-<option value="admin">Admin</option>
+<input type="hidden" name="role" value="staff">
 
-</select>
+<p>ℹ️ New users are Staff accounts.</p>
 
 <button>➕ Create User</button>
 
