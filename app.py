@@ -586,6 +586,51 @@ def dashboard():
         Order.date.desc()
     ).limit(5).all()
 
+    # V11 Analytics
+    analytics_sales = Sale.query.order_by(
+        Sale.date.desc()
+    ).limit(7).all()
+
+    sales_labels = [
+        x.date.strftime("%d %b") if x.date else "N/A"
+        for x in reversed(analytics_sales)
+    ]
+
+    sales_revenue = [
+        float(x.total or 0)
+        for x in reversed(analytics_sales)
+    ]
+
+    sales_profit = [
+        float(x.profit or 0)
+        for x in reversed(analytics_sales)
+    ]
+
+    item_sales = {}
+
+    for sale in Sale.query.all():
+        name = sale.item or "Unknown"
+        item_sales[name] = item_sales.get(name, 0) + (sale.quantity or 0)
+
+    top_items = sorted(
+        item_sales.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:5]
+
+    top_item_labels = [x[0] for x in top_items]
+    top_item_quantities = [x[1] for x in top_items]
+
+    out_of_stock = [
+        x for x in items
+        if x.quantity <= 0
+    ]
+
+    healthy_stock = [
+        x for x in items
+        if x.quantity > x.minimum
+    ]
+
     labels = [x.name for x in items]
     quantities = [x.quantity for x in items]
 
@@ -716,6 +761,151 @@ document.getElementById("globalSearch").addEventListener("input", function () {
 {% endif %}
 
 <div class="card">
+<div class="grid">
+
+<div class="card">
+<h2>📈 Sales Analytics</h2>
+<canvas id="salesChart"></canvas>
+</div>
+
+<div class="card">
+<h2>🏆 Top Selling Items</h2>
+<canvas id="topItemsChart"></canvas>
+</div>
+
+</div>
+
+<div class="grid">
+
+<div class="card">
+<h2>📦 Stock Health</h2>
+<p>🟢 Healthy Stock: <b>{{healthy_stock|length}}</b></p>
+<p>🟡 Low Stock: <b>{{low|length}}</b></p>
+<p>🔴 Out of Stock: <b>{{out_of_stock|length}}</b></p>
+</div>
+
+<div class="card">
+<h2>📊 V11 Business Summary</h2>
+<p>💵 Revenue: <b>₹{{"%.2f"|format(revenue)}}</b></p>
+<p>📈 Profit: <b>₹{{"%.2f"|format(profit)}}</b></p>
+<p>📦 Total Items: <b>{{items|length}}</b></p>
+<p>📋 Pending PO: <b>{{pending}}</b></p>
+</div>
+
+</div>
+
+<div class="grid">
+
+<div class="card">
+<h2>💵 Recent Sales</h2>
+
+{% if recent_sales %}
+<table>
+<tr>
+<th>Invoice</th>
+<th>Customer</th>
+<th>Item</th>
+<th>Total</th>
+</tr>
+
+{% for x in recent_sales %}
+<tr>
+<td>{{x.invoice_no}}</td>
+<td>{{x.customer}}</td>
+<td>{{x.item}}</td>
+<td>₹{{"%.2f"|format(x.total or 0)}}</td>
+</tr>
+{% endfor %}
+
+</table>
+{% else %}
+<p>No sales yet.</p>
+{% endif %}
+
+</div>
+
+<div class="card">
+<h2>📋 Recent Purchase Orders</h2>
+
+{% if recent_orders %}
+<table>
+<tr>
+<th>PO</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Status</th>
+</tr>
+
+{% for x in recent_orders %}
+<tr>
+<td>{{x.po_no}}</td>
+<td>{{x.item}}</td>
+<td>{{x.quantity}}</td>
+<td>{{x.status}}</td>
+</tr>
+{% endfor %}
+
+</table>
+{% else %}
+<p>No purchase orders yet.</p>
+{% endif %}
+
+</div>
+
+</div>
+
+<script>
+new Chart(
+document.getElementById("salesChart"),
+{
+type:"line",
+data:{
+labels:{{sales_labels|tojson}},
+datasets:[
+{
+label:"Revenue",
+data:{{sales_revenue|tojson}},
+tension:0.3
+},
+{
+label:"Profit",
+data:{{sales_profit|tojson}},
+tension:0.3
+}
+]
+},
+options:{
+responsive:true,
+plugins:{
+legend:{display:true}
+}
+}
+}
+);
+
+new Chart(
+document.getElementById("topItemsChart"),
+{
+type:"bar",
+data:{
+labels:{{top_item_labels|tojson}},
+datasets:[
+{
+label:"Units Sold",
+data:{{top_item_quantities|tojson}}
+}
+]
+},
+options:{
+responsive:true,
+plugins:{
+legend:{display:true}
+}
+}
+}
+);
+</script>
+
 <h2>📊 Inventory Overview</h2>
 <canvas id="inventoryChart"></canvas>
 </div>
@@ -772,6 +962,15 @@ legend:{display:true}
         profit=profit,
         low=low,
         pending=pending,
+        recent_sales=recent_sales,
+        recent_orders=recent_orders,
+        sales_labels=sales_labels,
+        sales_revenue=sales_revenue,
+        sales_profit=sales_profit,
+        top_item_labels=top_item_labels,
+        top_item_quantities=top_item_quantities,
+        out_of_stock=out_of_stock,
+        healthy_stock=healthy_stock,
         labels=labels,
         quantities=quantities
     )
