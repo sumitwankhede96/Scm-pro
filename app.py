@@ -991,68 +991,54 @@ required>
 def sales():
 
     if request.method == "POST":
-
         try:
-            item_id = request.form.get("item", "").strip()
-            quantity_raw = request.form.get("quantity", "").strip()
+            item_name = request.form.get("item_name", "").strip()
+            quantity = int(request.form.get("quantity", "0"))
             customer = request.form.get("customer", "").strip() or "Walk-in Customer"
 
-            if not item_id:
-                return "❌ Please select an item", 400
+            if not item_name:
+                return "❌ Please enter an item name", 400
 
-            if not quantity_raw:
-                return "❌ Please enter quantity", 400
+            if quantity <= 0:
+                return "❌ Invalid quantity", 400
 
-            item = db.session.get(Item, int(item_id))
-            quantity = int(quantity_raw)
+            item = Item.query.filter(
+                db.func.lower(Item.name) == item_name.lower()
+            ).first()
+
+            if not item:
+                return "❌ Item not found in Inventory. Please add the item first.", 400
+
+            if quantity > item.quantity:
+                return "❌ Insufficient stock", 400
+
+            total = quantity * item.price
+            profit = quantity * (item.price - item.cost)
+
+            invoice_no = "INV-" + datetime.now().strftime("%Y%m%d%H%M%S")
+
+            item.quantity -= quantity
+
+            sale = Sale(
+                invoice_no=invoice_no,
+                customer=customer,
+                item=item.name,
+                quantity=quantity,
+                total=total,
+                profit=profit
+            )
+
+            db.session.add(sale)
+            log(f"Sale: {item.name} x {quantity}")
+            db.session.commit()
+
+            return redirect(url_for("invoice", invoice_no=invoice_no))
 
         except (ValueError, TypeError):
-            return "❌ Invalid item or quantity", 400
-
-        if not item:
-            return "❌ Item not found"
-
-        if quantity <= 0:
-            return "❌ Invalid quantity"
-
-        if quantity > item.quantity:
-            return "❌ Insufficient stock"
-
-        total = quantity * item.price
-        profit = quantity * (
-            item.price - item.cost
-        )
-
-        invoice_no = (
-            "INV-" +
-            datetime.now().strftime("%Y%m%d%H%M%S")
-        )
-
-        item.quantity -= quantity
-
-        sale = Sale(
-            invoice_no=invoice_no,
-            customer=customer,
-            item=item.name,
-            quantity=quantity,
-            total=total,
-            profit=profit
-        )
-
-        db.session.add(sale)
-
-        log(
-            f"Sale: {item.name} x {quantity}"
-        )
-
-        db.session.commit()
-
-        return redirect(
-            url_for(
-                "invoice",
-                invoice_no=invoice_no
-            )
-        )
+            return "❌ Please enter a valid quantity", 400
+        except Exception as e:
+            db.session.rollback()
+            return "❌ Sale failed: " + str(e), 500
 
     items = Item.query.all()
 
@@ -1065,24 +1051,25 @@ def sales():
 
 <form method="post">
 
+<label>Customer Name</label>
 <input
 name="customer"
 placeholder="Customer Name">
 
-<select name="item" required>
+<label>Item Name</label>
+<input
+name="item_name"
+list="salesItems"
+placeholder="Type item name"
+required>
 
-<option value="" selected disabled>-- Select Item --</option>
-
+<datalist id="salesItems">
 {% for x in items %}
-
-<option value="{{x.id}}">
-{{x.name}} — ₹{{x.price}} — Stock {{x.quantity}}
-</option>
-
+<option value="{{x.name}}">₹{{x.price}} — Stock {{x.quantity}}</option>
 {% endfor %}
+</datalist>
 
-</select>
-
+<label>Quantity</label>
 <input
 name="quantity"
 type="number"
@@ -1090,7 +1077,7 @@ min="1"
 placeholder="Quantity"
 required>
 
-<button>💵 Record Sale</button>
+<button type="submit">💵 Record Sale</button>
 
 </form>
 
@@ -1107,9 +1094,7 @@ required>
 </tr>
 
 {% for x in sales %}
-
 <tr>
-
 <td>{{x.invoice_no}}</td>
 <td>{{x.customer}}</td>
 <td>{{x.item}}</td>
@@ -1117,9 +1102,7 @@ required>
 <td>₹{{"%.2f"|format(x.total)}}</td>
 <td>₹{{"%.2f"|format(x.profit)}}</td>
 <td>{{x.date}}</td>
-
 </tr>
-
 {% endfor %}
 
 </table>
