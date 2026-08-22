@@ -2175,3 +2175,7 @@ setInterval(loadInventory,30000);
 </script>
 """)
 
+
+# V9 input visibility fix
+app.jinja_env.globals["V9_INPUT_FIX"] = True
+
