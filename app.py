@@ -61,7 +61,7 @@ def login():
     if request.method=="POST":
         if request.form["user"]=="admin" and request.form["password"]=="admin123":
             session["login"]=True
-            return redirect("/")
+            return redirect("/dashboard")
         return "❌ Wrong username or password"
     return LOGIN
 
@@ -69,6 +69,10 @@ def login():
 def logout():
     session.clear()
     return redirect("/login")
+
+@app.route("/dashboard")
+def dashboard():
+    return home()
 
 @app.route("/")
 def home():
