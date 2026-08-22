@@ -213,11 +213,12 @@ margin:15px 0
 }
 
 input,select,textarea{
-width:100%;
-padding:11px;
-margin:5px 0;
-border:1px solid #d1d5db;
-border-radius:9px;
+background:#ffffff !important;
+color:#111827 !important;
+-webkit-text-fill-color:#111827 !important;
+caret-color:#111827 !important;
+border:1px solid #cbd5e1;
+}
 font-size:15px
 }
 
