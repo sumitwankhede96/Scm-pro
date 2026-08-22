@@ -782,9 +782,13 @@ def inventory():
         try:
 
             sku = request.form["sku"].strip()
+            name = request.form["name"].strip()
+
+            if not sku or not name:
+                return "❌ SKU and Item Name are required", 400
 
             if Item.query.filter_by(sku=sku).first():
-                return "❌ SKU already exists"
+                return "❌ SKU already exists", 400
 
             item = Item(
                 sku=sku,
@@ -1263,6 +1267,26 @@ def orders():
 
     if request.method == "POST":
 
+        item_name = request.form.get("item", "").strip()
+        supplier_name = request.form.get("supplier", "").strip()
+
+        try:
+            quantity = int(request.form.get("quantity", "0"))
+        except ValueError:
+            return "❌ Invalid quantity", 400
+
+        if not item_name:
+            return "❌ Please select an item", 400
+
+        if quantity <= 0:
+            return "❌ Quantity must be greater than 0", 400
+
+        if not Item.query.filter_by(name=item_name).first():
+            return "❌ Selected item does not exist in inventory", 400
+
+        if not Supplier.query.filter_by(name=supplier_name).first():
+            return "❌ Selected supplier does not exist", 400
+
         po_no = (
             "PO-" +
             datetime.now().strftime("%Y%m%d%H%M%S")
@@ -1270,9 +1294,9 @@ def orders():
 
         order = Order(
             po_no=po_no,
-            item=request.form["item"],
-            quantity=int(request.form["quantity"]),
-            supplier=request.form["supplier"],
+            item=item_name,
+            quantity=quantity,
+            supplier=supplier_name,
             status="Pending"
         )
 
@@ -1400,27 +1424,33 @@ def order_update(id):
 
     order.status = new
 
-    # When PO becomes Received, add stock once.
-    if new == "Received" and old != "Received":
+        # When PO becomes Received, add stock only once.
+        if new == "Received" and old != "Received":
 
-        item = Item.query.filter(
-            (Item.name == order.item)
-            | (Item.sku == order.item)
-        ).first()
+            already_received = StockLog.query.filter_by(
+                action="IN",
+                note=f"PO {order.po_no} received"
+            ).first()
 
-        if item:
-            item.quantity += order.quantity
+            if not already_received:
 
-            db.session.add(
-                StockLog(
-                    item=item.name,
-                    action="IN",
-                    quantity=order.quantity,
-                    note=f"PO {order.po_no} received",
-                    user=session["username"]
-                )
-            )
+                item = Item.query.filter(
+                    (Item.name == order.item)
+                    | (Item.sku == order.item)
+                ).first()
 
+                if item:
+                    item.quantity += order.quantity
+
+                    db.session.add(
+                        StockLog(
+                            item=item.name,
+                            action="IN",
+                            quantity=order.quantity,
+                            note=f"PO {order.po_no} received",
+                            user=session["username"]
+                        )
+                    )
     log(
         f"PO {order.po_no}: {old} → {new}"
     )
