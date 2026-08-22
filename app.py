@@ -578,6 +578,14 @@ def dashboard():
         status="Pending"
     ).count()
 
+    recent_sales = Sale.query.order_by(
+        Sale.date.desc()
+    ).limit(5).all()
+
+    recent_orders = Order.query.order_by(
+        Order.date.desc()
+    ).limit(5).all()
+
     labels = [x.name for x in items]
     quantities = [x.quantity for x in items]
 
