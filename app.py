@@ -105,6 +105,10 @@ class Invoice(db.Model):
     item = db.Column(db.String(150))
     quantity = db.Column(db.Integer)
     amount = db.Column(db.Float)
+    payment_status = db.Column(db.String(30), default="Unpaid")
+    paid_amount = db.Column(db.Float, default=0)
+    due_date = db.Column(db.DateTime, nullable=True)
+    notes = db.Column(db.String(500), default="")
     date = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -117,6 +121,46 @@ class Activity(db.Model):
 
 with app.app_context():
     db.create_all()
+
+    # V12 safe migration for existing SQLite databases.
+    try:
+        from sqlalchemy import inspect, text
+
+        inspector = inspect(db.engine)
+        invoice_columns = {
+            c["name"] for c in inspector.get_columns("invoice")
+        }
+
+        migrations = []
+
+        if "payment_status" not in invoice_columns:
+            migrations.append(
+                'ALTER TABLE invoice ADD COLUMN payment_status VARCHAR(30) DEFAULT "Unpaid"'
+            )
+
+        if "paid_amount" not in invoice_columns:
+            migrations.append(
+                'ALTER TABLE invoice ADD COLUMN paid_amount FLOAT DEFAULT 0'
+            )
+
+        if "due_date" not in invoice_columns:
+            migrations.append(
+                "ALTER TABLE invoice ADD COLUMN due_date DATETIME"
+            )
+
+        if "notes" not in invoice_columns:
+            migrations.append(
+                "ALTER TABLE invoice ADD COLUMN notes VARCHAR(500) DEFAULT ''"
+            )
+
+        for sql in migrations:
+            db.session.execute(text(sql))
+
+        if migrations:
+            db.session.commit()
+
+    except Exception:
+        db.session.rollback()
 
     if not User.query.filter_by(username="admin").first():
         u = User(username="admin", role="admin")
@@ -569,6 +613,66 @@ def dashboard():
     revenue = sum(x.total for x in sales)
     profit = sum(x.profit for x in sales)
 
+    # V12 Financial Analytics
+    invoices = Invoice.query.all()
+
+    total_invoiced = sum(
+        float(x.amount or 0)
+        for x in invoices
+    )
+
+    total_paid = sum(
+        float(x.paid_amount or 0)
+        for x in invoices
+    )
+
+    outstanding = max(
+        total_invoiced - total_paid,
+        0
+    )
+
+    collection_rate = (
+        (total_paid / total_invoiced) * 100
+        if total_invoiced > 0
+        else 0
+    )
+
+    unpaid_invoices = sum(
+        1 for x in invoices
+        if (x.payment_status or "Unpaid") == "Unpaid"
+    )
+
+    partial_invoices = sum(
+        1 for x in invoices
+        if (x.payment_status or "Unpaid") == "Partial"
+    )
+
+    paid_invoices = sum(
+        1 for x in invoices
+        if (x.payment_status or "Unpaid") == "Paid"
+    )
+
+    # V12 Invoice balances
+    invoice_balances = []
+
+    for inv in invoices:
+        total = float(inv.amount or 0)
+        paid = float(inv.paid_amount or 0)
+
+        invoice_balances.append({
+            "invoice_no": inv.invoice_no,
+            "customer": inv.customer,
+            "total": total,
+            "paid": paid,
+            "balance": max(total - paid, 0),
+            "status": inv.payment_status or "Unpaid"
+        })
+
+    invoice_balances.sort(
+        key=lambda x: x["balance"],
+        reverse=True
+    )
+
     low = [
         x for x in items
         if x.quantity <= x.minimum
@@ -636,7 +740,79 @@ def dashboard():
 
     return render_page("""
 
-<h1>📊 SCM PRO V10 Dashboard</h1>
+<h1>📊 SCM PRO V12 Dashboard</h1>
+
+<div style="
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+gap:12px;
+margin-bottom:20px;
+">
+
+<div class="card">
+<h3>💰 Revenue</h3>
+<h2>₹{{"%.2f"|format(revenue or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>📈 Profit</h3>
+<h2>₹{{"%.2f"|format(profit or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>🧾 Invoiced</h3>
+<h2>₹{{"%.2f"|format(total_invoiced or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>💳 Collected</h3>
+<h2>₹{{"%.2f"|format(total_paid or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>⚠️ Outstanding</h3>
+<h2>₹{{"%.2f"|format(outstanding or 0)}}</h2>
+</div>
+
+<div class="card">
+<h3>📊 Collection Rate</h3>
+<h2>{{"%.1f"|format(collection_rate or 0)}}%</h2>
+</div>
+
+</div>
+
+<div class="card">
+
+<h2>🧾 Invoice Payment Summary</h2>
+
+<div style="
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+gap:10px;
+">
+
+<div>
+<b>🟢 Paid</b>
+<br>
+{{paid_invoices}}
+</div>
+
+<div>
+<b>🟡 Partial</b>
+<br>
+{{partial_invoices}}
+</div>
+
+<div>
+<b>🔴 Unpaid</b>
+<br>
+{{unpaid_invoices}}
+</div>
+
+</div>
+
+</div>
+
 
 <div class="card">
 <h2>🔎 Global Search</h2>
@@ -1909,6 +2085,51 @@ required>
 
 </table>
 """, items=items, invoices=invoices)
+
+
+@app.post("/api/invoice/<invoice_no>/payment")
+@login_required
+def v12_update_payment(invoice_no):
+
+    inv = Invoice.query.filter_by(
+        invoice_no=invoice_no
+    ).first()
+
+    if not inv:
+        return {"error": "Invoice not found"}, 404
+
+    try:
+        paid = float(request.form.get("paid_amount", "0"))
+    except (TypeError, ValueError):
+        return {"error": "Invalid paid amount"}, 400
+
+    total = float(inv.amount or 0)
+
+    if paid < 0:
+        return {"error": "Paid amount cannot be negative"}, 400
+
+    if paid > total:
+        return {"error": "Paid amount cannot exceed invoice total"}, 400
+
+    inv.paid_amount = paid
+
+    if paid <= 0:
+        inv.payment_status = "Unpaid"
+    elif paid < total:
+        inv.payment_status = "Partial"
+    else:
+        inv.payment_status = "Paid"
+
+    db.session.commit()
+
+    log(
+        f"Invoice payment updated: {invoice_no} "
+        f"₹{paid:.2f} — {inv.payment_status}"
+    )
+
+    return redirect(
+        url_for("invoice", invoice_no=invoice_no)
+    )
 
 
 @app.route("/invoice/<invoice_no>")
