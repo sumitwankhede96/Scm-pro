@@ -343,7 +343,7 @@ LOGIN = STYLE + """
 <main style="max-width:430px;margin:70px auto">
 <div class="card">
 
-<h1>🔐 SCM PRO V8</h1>
+<h1>🔐 SCM PRO V11</h1>
 
 <p>Enterprise Supply Chain Management</p>
 
