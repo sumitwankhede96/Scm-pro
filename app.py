@@ -1268,16 +1268,19 @@ def orders():
     ).all()
 
     suppliers = Supplier.query.all()
+    items = Item.query.order_by(Item.name.asc()).all()
 
     return render_page("""
 <h1>📋 Purchase Orders</h1>
 
 <form method="post">
 
-<input
-name="item"
-placeholder="Item Name"
-required>
+<select name="item" required>
+<option value="">Select Item</option>
+{% for i in items %}
+<option value="{{i.name}}">{{i.name}} — Stock: {{i.quantity}}</option>
+{% endfor %}
+</select>
 
 <input
 name="quantity"
@@ -1357,7 +1360,7 @@ style="padding:0;margin:0">
 {% endfor %}
 
 </table>
-""", orders=orders, suppliers=suppliers)
+""", orders=orders, suppliers=suppliers, items=items)
 
 
 @app.post("/order/<int:id>")
