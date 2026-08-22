@@ -1042,6 +1042,24 @@ def sales():
 
     items = Item.query.all()
 
+    # Create a demo item automatically if inventory is empty.
+    # This is only for initial testing of the Sales page.
+    if not items:
+        demo = Item(
+            sku="DEMO-001",
+            name="Demo Product",
+            quantity=10,
+            price=100,
+            cost=60,
+            minimum=2,
+            supplier="Demo Supplier",
+            category="General",
+            location="Main"
+        )
+        db.session.add(demo)
+        db.session.commit()
+        items = [demo]
+
     sales = Sale.query.order_by(
         Sale.date.desc()
     ).limit(100).all()
