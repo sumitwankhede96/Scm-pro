@@ -347,7 +347,7 @@ required>
 
 <p><b>Demo Accounts</b></p>
 <p>Admin: admin / admin123</p>
-<p>Manager: manager / manager123</p>
+
 <p>Staff: staff / staff123</p>
 
 </div>
