@@ -134,6 +134,29 @@ with app.app_context():
         u.set_password("staff123")
         db.session.add(u)
 
+    # Create demo inventory/supplier only when database is empty.
+    if Item.query.count() == 0:
+        db.session.add(Item(
+            sku="DEMO-001",
+            name="Bilt",
+            quantity=10,
+            price=100,
+            cost=70,
+            minimum=2,
+            supplier="Demo Supplier",
+            category="Demo",
+            location="Main Store"
+        ))
+
+    if Supplier.query.count() == 0:
+        db.session.add(Supplier(
+            name="Demo Supplier",
+            phone="",
+            email="",
+            address="",
+            rating=5
+        ))
+
     db.session.commit()
 
 
